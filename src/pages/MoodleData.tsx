@@ -19,8 +19,7 @@ export default function MoodleData() {
   const [selectedCourse, setSelectedCourse] = useState<MoodleCourse | null>(null)
 
   useEffect(() => {
-    const cfg = getMoodleConfig()
-    if (cfg) setConfig(cfg)
+    getMoodleConfig().then((cfg) => { if (cfg) setConfig(cfg) })
   }, [])
 
   async function handleTestAndSave() {

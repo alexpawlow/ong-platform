@@ -11,14 +11,16 @@ import Settings from './pages/Settings'
 import { ROLE_PERMISSIONS } from './types'
 
 function ProtectedRoute({ children, resource }: { children: React.ReactNode; resource: string }) {
-  const { appUser } = useAuth()
+  const { appUser, loading } = useAuth()
+  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
   if (!appUser) return <Navigate to="/login" replace />
   if (!ROLE_PERMISSIONS[appUser.role].includes(resource)) return <Navigate to="/dashboard" replace />
   return <Layout>{children}</Layout>
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { appUser } = useAuth()
+  const { appUser, loading } = useAuth()
+  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
   if (appUser) return <Navigate to="/dashboard" replace />
   return <>{children}</>
 }

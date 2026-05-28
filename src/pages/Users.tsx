@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
 import { RoleBadge, StatusBadge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
-import { getUsers, updateUser, deleteUser, createUser, generateId } from '../lib/storage'
+import { getUsers, updateUser, deleteUser, adminCreateUser } from '../lib/storage'
 import { useAuth } from '../contexts/AuthContext'
 import type { AppUser, UserRole } from '../types'
 
@@ -28,36 +28,46 @@ export default function Users() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
 
-  useEffect(() => { setUsers(getUsers()) }, [])
+  useEffect(() => { getUsers().then(setUsers) }, [])
 
   function openEdit(user: AppUser) {
     setEditTarget(user)
     setForm({ displayName: user.displayName, role: user.role, active: user.active })
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!editTarget) return
     setSaving(true)
-    updateUser(editTarget.uid, form)
-    setUsers((prev) => prev.map((u) => u.uid === editTarget.uid ? { ...u, ...form } : u))
-    setEditTarget(null)
-    setSaving(false)
+    try {
+      await updateUser(editTarget.uid, form)
+      setUsers((prev) => prev.map((u) => u.uid === editTarget.uid ? { ...u, ...form } : u))
+      setEditTarget(null)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  function handleInvite() {
+  async function handleInvite() {
     if (!inviteForm.displayName || !inviteForm.email || !inviteForm.password) return
     setSaving(true)
-    const uid = generateId()
-    const newUser: AppUser = { uid, email: inviteForm.email, displayName: inviteForm.displayName, role: inviteForm.role, active: true, createdAt: new Date().toISOString() }
-    createUser({ ...newUser, password: inviteForm.password })
-    setUsers((prev) => [...prev, newUser])
-    setInviteForm({ ...EMPTY_FORM })
-    setInviteOpen(false)
-    setSaving(false)
+    try {
+      const uid = await adminCreateUser(inviteForm.email, inviteForm.password, inviteForm.displayName, inviteForm.role)
+      const newUser: AppUser = {
+        uid, email: inviteForm.email, displayName: inviteForm.displayName,
+        role: inviteForm.role, active: true, createdAt: new Date().toISOString(),
+      }
+      setUsers((prev) => [...prev, newUser])
+      setInviteForm({ ...EMPTY_FORM })
+      setInviteOpen(false)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao criar usuário.')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  function handleDelete(uid: string) {
-    deleteUser(uid)
+  async function handleDelete(uid: string) {
+    await deleteUser(uid)
     setUsers((prev) => prev.filter((u) => u.uid !== uid))
     setDeleteTarget(null)
   }
@@ -151,7 +161,7 @@ export default function Users() {
       >
         <div className="form-stack">
           <Input label="Nome completo" value={inviteForm.displayName} onChange={(e) => setInviteForm({ ...inviteForm, displayName: e.target.value })} placeholder="Ex: Maria Silva" />
-          <Input label="E-mail" type="email" value={inviteForm.email} onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })} placeholder="maria@ong.local" />
+          <Input label="E-mail" type="email" value={inviteForm.email} onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })} placeholder="maria@suaong.org" />
           <div className="field">
             <label className="field-label">Senha inicial</label>
             <div className="field-wrapper">
@@ -173,7 +183,7 @@ export default function Users() {
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Remover usuário" size="sm"
         footer={<div className="modal-footer-row"><Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancelar</Button><Button variant="danger" onClick={() => deleteTarget && handleDelete(deleteTarget)}>Remover</Button></div>}
       >
-        <p>Esta ação remove o acesso deste usuário à plataforma.</p>
+        <p>Esta ação remove o acesso deste usuário à plataforma. Para remover completamente, exclua também em <strong>Supabase → Auth → Users</strong>.</p>
       </Modal>
     </div>
   )

@@ -5,28 +5,25 @@ import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
 import { changePassword } from '../lib/localAuth'
 import { useAuth } from '../contexts/AuthContext'
-import { getUserById } from '../lib/storage'
 
 type Status = 'idle' | 'loading' | 'success' | 'error'
 
 export default function Settings() {
-  const { appUser, refreshUser } = useAuth()
+  const { appUser } = useAuth()
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
   const [pwStatus, setPwStatus] = useState<Status>('idle')
   const [pwError, setPwError] = useState('')
 
-  function handlePasswordChange(e: React.FormEvent) {
+  async function handlePasswordChange(e: React.FormEvent) {
     e.preventDefault()
     setPwError('')
     if (pwForm.next !== pwForm.confirm) { setPwError('As senhas não coincidem.'); return }
     if (!appUser) return
     setPwStatus('loading')
     try {
-      changePassword(appUser.uid, pwForm.current, pwForm.next)
+      await changePassword(appUser.uid, pwForm.current, pwForm.next)
       setPwStatus('success')
       setPwForm({ current: '', next: '', confirm: '' })
-      const updated = getUserById(appUser.uid)
-      if (updated) refreshUser(updated)
       setTimeout(() => setPwStatus('idle'), 4000)
     } catch (err: unknown) {
       setPwStatus('error')
@@ -77,7 +74,7 @@ export default function Settings() {
             <h3 className="settings-section__title"><BookOpen size={16} /> Integração Moodle</h3>
             <p className="text-secondary">Configure a URL e o token da API do Moodle na página <a href="/moodle" className="link">Dados do Moodle</a>.</p>
             <div className="alert alert--info" style={{ marginTop: 12 }}>
-              As configurações ficam salvas localmente. Ao conectar o Firebase, serão migradas para o banco.
+              As configurações ficam salvas no Supabase e são compartilhadas entre todos os usuários admin.
             </div>
           </div>
         </Card>
@@ -85,19 +82,9 @@ export default function Settings() {
         <Card>
           <div className="settings-section">
             <h3 className="settings-section__title"><Mail size={16} /> Integração Mailchimp</h3>
-            <p className="text-secondary">A integração com o Mailchimp será configurada após conectar o Firebase Cloud Functions.</p>
+            <p className="text-secondary">A integração com o Mailchimp será gerenciada via Supabase Edge Functions para proteger sua API key.</p>
             <div className="alert alert--warning" style={{ marginTop: 12 }}>
               <strong>Nunca</strong> insira sua API key do Mailchimp diretamente no frontend.
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="settings-section">
-            <h3 className="settings-section__title">Armazenamento</h3>
-            <p className="text-secondary">Todos os dados estão salvos <strong>localmente no navegador</strong>.</p>
-            <div className="alert alert--info" style={{ marginTop: 12 }}>
-              Quando você configurar o Firebase, os dados serão migrados para o banco de dados na nuvem.
             </div>
           </div>
         </Card>

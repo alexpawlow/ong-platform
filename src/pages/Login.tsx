@@ -1,26 +1,24 @@
 import { useState, type FormEvent } from 'react'
 import { Brain, Mail, Lock, Sun, Moon } from 'lucide-react'
 import { login } from '../lib/localAuth'
-import { useAuth } from '../contexts/AuthContext'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
 import { useTheme } from '../contexts/ThemeContext'
 
 export default function Login() {
-  const { setAppUser } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      const user = login(email, password)
-      setAppUser(user)
+      await login(email, password)
+      // AuthContext detecta o login via onAuthStateChange — redirecionamento automático
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erro ao entrar.')
     } finally {
@@ -46,9 +44,7 @@ export default function Login() {
             placeholder="seu@email.com" icon={<Mail size={16} />} required autoComplete="email" />
           <Input label="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••" icon={<Lock size={16} />} required autoComplete="current-password" />
-
           {error && <div className="login-error">{error}</div>}
-
           <Button type="submit" loading={loading} className="login-submit">Entrar</Button>
         </form>
       </div>
