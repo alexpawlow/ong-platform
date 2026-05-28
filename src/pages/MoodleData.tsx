@@ -16,6 +16,7 @@ export default function MoodleData() {
   const [syncing, setSyncing] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null)
+  const [testError, setTestError] = useState<string>('')
   const [selectedCourse, setSelectedCourse] = useState<MoodleCourse | null>(null)
 
   useEffect(() => {
@@ -26,18 +27,19 @@ export default function MoodleData() {
     if (!config.url || !config.token) return
     setLoading(true)
     setTestResult(null)
+    setTestError('')
     try {
       const svc = new MoodleService(config.url, config.token)
-      const ok = await svc.testConnection()
-      setTestResult(ok ? 'success' : 'error')
-      if (ok) {
-        const updated = { ...config, connected: true, lastSync: new Date().toISOString() }
-        saveMoodleConfig(updated)
-        setConfig(updated)
-        setConfigOpen(false)
-      }
-    } catch {
+      await svc.testConnection()
+      setTestResult('success')
+      const updated = { ...config, connected: true, lastSync: new Date().toISOString() }
+      await saveMoodleConfig(updated)
+      setConfig(updated)
+      setTimeout(() => setConfigOpen(false), 800)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
       setTestResult('error')
+      setTestError(msg)
     } finally {
       setLoading(false)
     }
@@ -104,15 +106,19 @@ export default function MoodleData() {
         ))}
       </div>
 
-      <Modal open={configOpen} onClose={() => { setConfigOpen(false); setTestResult(null) }} title="Configurar Integração Moodle" size="md"
+      <Modal open={configOpen} onClose={() => { setConfigOpen(false); setTestResult(null); setTestError('') }} title="Configurar Integração Moodle" size="md"
         footer={<div className="modal-footer-row"><Button variant="ghost" onClick={() => setConfigOpen(false)}>Cancelar</Button><Button onClick={handleTestAndSave} loading={loading}>Testar e Salvar</Button></div>}
       >
         <div className="form-stack">
           <Input label="URL da instância Moodle" type="url" placeholder="https://moodle.suaong.org.br" value={config.url} onChange={(e) => setConfig({ ...config, url: e.target.value })} hint="URL base sem barra no final." />
           <Input label="Token de acesso (Web Service)" type="password" placeholder="••••••••••••••••" value={config.token} onChange={(e) => setConfig({ ...config, token: e.target.value })} hint="Moodle → Admin → Plugins → Web Services → Gerenciar tokens." />
           {testResult === 'success' && <div className="alert alert--success"><CheckCircle2 size={16} /> Conexão bem-sucedida!</div>}
-          {testResult === 'error' && <div className="alert alert--error"><XCircle size={16} /> Falha na conexão. Verifique a URL e o token.</div>}
-          <div className="alert alert--info"><strong>Dica:</strong> As configurações ficam salvas localmente. Ao conectar o Firebase, serão migradas para o banco.</div>
+          {testResult === 'error' && (
+            <div className="alert alert--error">
+              <XCircle size={16} />
+              <span>{testError || 'Falha na conexão. Verifique a URL e o token.'}</span>
+            </div>
+          )}
         </div>
       </Modal>
 

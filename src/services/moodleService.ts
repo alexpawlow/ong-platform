@@ -10,47 +10,33 @@ export class MoodleService {
   }
 
   private async call<T>(wsfunction: string, params: Record<string, string | number> = {}): Promise<T> {
-    // Em produção usa o proxy /api/moodle para evitar CORS.
-    // Em desenvolvimento chama o Moodle diretamente.
-    const isDev = import.meta.env.DEV
+    // Sempre usa o proxy /api/moodle para evitar CORS (tanto em dev quanto produção)
+    const res = await fetch('/api/moodle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: this.baseUrl, token: this.token, wsfunction, params }),
+    })
 
-    if (!isDev) {
-      const res = await fetch('/api/moodle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: this.baseUrl, token: this.token, wsfunction, params }),
-      })
-      if (!res.ok) throw new Error(`Proxy error: ${res.status}`)
-      const data = await res.json()
-      if (data.exception) throw new Error(data.message || data.exception)
-      return data as T
+    let data: Record<string, unknown>
+    try {
+      data = await res.json()
+    } catch {
+      throw new Error(`Resposta inválida do servidor (status ${res.status})`)
     }
 
-    // Desenvolvimento: chamada direta
-    const body = new URLSearchParams({
-      wstoken: this.token,
-      wsfunction,
-      moodlewsrestformat: 'json',
-      ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
-    })
-    const res = await fetch(`${this.baseUrl}/webservice/rest/server.php`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    })
-    if (!res.ok) throw new Error(`Moodle HTTP error: ${res.status}`)
-    const data = await res.json()
-    if (data.exception) throw new Error(data.message || data.exception)
+    if (!res.ok) {
+      throw new Error((data?.error as string) || `Erro no proxy: ${res.status}`)
+    }
+
+    if (data?.exception) {
+      throw new Error((data.message as string) || (data.exception as string))
+    }
+
     return data as T
   }
 
-  async testConnection(): Promise<boolean> {
-    try {
-      await this.call('core_webservice_get_site_info')
-      return true
-    } catch {
-      return false
-    }
+  async testConnection(): Promise<void> {
+    await this.call('core_webservice_get_site_info')
   }
 
   async getCourses(): Promise<MoodleCourse[]> {

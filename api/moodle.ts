@@ -44,18 +44,28 @@ export default async function handler(req: Request): Promise<Response> {
       body: formBody.toString(),
     })
 
+    const text = await moodleRes.text()
+
     if (!moodleRes.ok) {
       return new Response(
-        JSON.stringify({ error: `Moodle retornou status ${moodleRes.status}` }),
+        JSON.stringify({ error: `Moodle retornou status ${moodleRes.status}`, details: text }),
         { status: 502, headers: corsHeaders }
       )
     }
 
-    const data = await moodleRes.json()
-    return new Response(JSON.stringify(data), { status: 200, headers: corsHeaders })
+    // Tenta parsear como JSON; se falhar, retorna o texto bruto como erro
+    try {
+      const data = JSON.parse(text)
+      return new Response(JSON.stringify(data), { status: 200, headers: corsHeaders })
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'Resposta inesperada do Moodle (não é JSON)', details: text.slice(0, 300) }),
+        { status: 502, headers: corsHeaders }
+      )
+    }
   } catch (err) {
     return new Response(
-      JSON.stringify({ error: 'Não foi possível conectar ao Moodle', details: String(err) }),
+      JSON.stringify({ error: `Não foi possível conectar ao Moodle: ${String(err)}` }),
       { status: 502, headers: corsHeaders }
     )
   }
