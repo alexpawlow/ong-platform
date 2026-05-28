@@ -2,12 +2,25 @@ import { supabase } from './supabaseClient'
 import type { AppUser, UserRole } from '../types'
 
 export async function login(email: string, password: string): Promise<void> {
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) {
-    if (error.message.includes('Invalid login credentials')) throw new Error('E-mail ou senha incorretos.')
-    if (error.message.includes('Email not confirmed')) throw new Error('Confirme seu e-mail antes de entrar.')
-    throw new Error('Erro ao entrar. Tente novamente.')
-  }
+  // Timeout de 10s para evitar spinner infinito
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão e tente novamente.')), 10000)
+  )
+
+  const authCall = supabase.auth.signInWithPassword({ email, password }).then(({ error }) => {
+    if (error) {
+      if (error.message.includes('Invalid login credentials')) {
+        throw new Error('E-mail ou senha incorretos.')
+      }
+      if (error.message.includes('Email not confirmed')) {
+        throw new Error('E-mail não confirmado. Vá em Supabase → Authentication → Users e clique em "Send confirmation email" ou desative a confirmação em Auth → Settings.')
+      }
+      // Mostra o erro real do Supabase para facilitar diagnóstico
+      throw new Error(`Erro ao entrar: ${error.message}`)
+    }
+  })
+
+  return Promise.race([authCall, timeout])
 }
 
 export async function logout(): Promise<void> {
@@ -29,21 +42,16 @@ export async function changePassword(
 }
 
 export async function getOrCreateProfile(user: { id: string; email?: string | null }): Promise<AppUser> {
-  // Busca perfil existente
   const { data: profile, error: selectError } = await supabase
     .from('profiles').select('*').eq('id', user.id).single()
 
-  // Tabela não existe ainda — lança para o caller usar o fallback
-  if (selectError?.code === '42P01') {
-    throw new Error('profiles table not found')
-  }
+  if (selectError?.code === '42P01') throw new Error('profiles table not found')
 
   if (profile) {
     void supabase.from('profiles').update({ last_login: new Date().toISOString() }).eq('id', user.id)
     return dbToAppUser(profile)
   }
 
-  // Perfil não existe — cria. Primeiro usuário vira admin, demais viewer.
   const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
   const role: UserRole = count === 0 ? 'admin' : 'viewer'
   const newProfile = {
@@ -58,24 +66,15 @@ export async function getOrCreateProfile(user: { id: string; email?: string | nu
   if (insertError?.code === '42P01') throw new Error('profiles table not found')
 
   return {
-    uid: user.id,
-    email: newProfile.email,
-    displayName: newProfile.display_name,
-    role,
-    active: true,
-    createdAt: new Date().toISOString(),
-    lastLogin: new Date().toISOString(),
+    uid: user.id, email: newProfile.email, displayName: newProfile.display_name,
+    role, active: true, createdAt: new Date().toISOString(), lastLogin: new Date().toISOString(),
   }
 }
 
 export function dbToAppUser(p: Record<string, unknown>): AppUser {
   return {
-    uid: p.id as string,
-    email: p.email as string,
-    displayName: p.display_name as string,
-    role: p.role as UserRole,
-    active: p.active as boolean,
-    createdAt: p.created_at as string,
-    lastLogin: p.last_login as string | undefined,
+    uid: p.id as string, email: p.email as string, displayName: p.display_name as string,
+    role: p.role as UserRole, active: p.active as boolean,
+    createdAt: p.created_at as string, lastLogin: p.last_login as string | undefined,
   }
 }
