@@ -1,26 +1,39 @@
 import { supabase } from './supabaseClient'
 import type { AppUser, UserRole } from '../types'
 
-export async function login(email: string, password: string): Promise<void> {
-  // Timeout de 10s para evitar spinner infinito
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão e tente novamente.')), 10000)
-  )
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-  const authCall = supabase.auth.signInWithPassword({ email, password }).then(({ error }) => {
-    if (error) {
-      if (error.message.includes('Invalid login credentials')) {
-        throw new Error('E-mail ou senha incorretos.')
-      }
-      if (error.message.includes('Email not confirmed')) {
-        throw new Error('E-mail não confirmado. Vá em Supabase → Authentication → Users e clique em "Send confirmation email" ou desative a confirmação em Auth → Settings.')
-      }
-      // Mostra o erro real do Supabase para facilitar diagnóstico
-      throw new Error(`Erro ao entrar: ${error.message}`)
-    }
+export async function login(email: string, password: string): Promise<void> {
+  // Faz fetch direto ao endpoint (igual ao curl que funciona),
+  // sem depender do comportamento interno do SDK.
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+    },
+    body: JSON.stringify({ email, password }),
   })
 
-  return Promise.race([authCall, timeout])
+  const data = await res.json()
+
+  if (!res.ok) {
+    const msg: string = data?.error_description ?? data?.message ?? data?.error ?? ''
+    if (msg.includes('Invalid login credentials') || data?.error === 'invalid_grant') {
+      throw new Error('E-mail ou senha incorretos.')
+    }
+    if (data?.error === 'email_not_confirmed') {
+      throw new Error('E-mail não confirmado. Confirme em Supabase → Auth → Users.')
+    }
+    throw new Error(`Erro ao entrar: ${msg || res.status}`)
+  }
+
+  // Injeta a sessão no cliente Supabase para que o onAuthStateChange dispare
+  await supabase.auth.setSession({
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+  })
 }
 
 export async function logout(): Promise<void> {
@@ -33,10 +46,18 @@ export async function changePassword(
   newPassword: string
 ): Promise<void> {
   if (newPassword.length < 6) throw new Error('A nova senha deve ter no mínimo 6 caracteres.')
+
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) throw new Error('Sessão inválida.')
-  const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword })
-  if (verifyError) throw new Error('Senha atual incorreta.')
+
+  // Verifica senha atual
+  const verifyRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify({ email: user.email, password: currentPassword }),
+  })
+  if (!verifyRes.ok) throw new Error('Senha atual incorreta.')
+
   const { error } = await supabase.auth.updateUser({ password: newPassword })
   if (error) throw new Error('Erro ao alterar senha.')
 }
