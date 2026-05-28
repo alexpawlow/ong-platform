@@ -13,41 +13,79 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+/** Monta um perfil mínimo a partir dos dados do Auth (fallback sem DB) */
+function fallbackProfile(user: { id: string; email?: string | null }): AppUser {
+  return {
+    uid: user.id,
+    email: user.email ?? '',
+    displayName: (user.email ?? '').split('@')[0],
+    role: 'admin',
+    active: true,
+    createdAt: new Date().toISOString(),
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [appUser, setAppUser] = useState<AppUser | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Usa apenas onAuthStateChange — ele dispara imediatamente com a sessão atual
+    let cancelled = false
+
+    // Safety net: nunca deixa o loading preso por mais de 4 segundos
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) setLoading(false)
+    }, 4000)
+
+    // 1. Carrega sessão existente de forma direta e confiável
+    supabase.auth.getSession()
+      .then(async ({ data: { session }, error }) => {
+        if (cancelled) return
+        try {
+          if (session?.user && !error) {
+            const profile = await getOrCreateProfile(session.user)
+            if (!cancelled) setAppUser(profile)
+          } else {
+            if (!cancelled) setAppUser(null)
+          }
+        } catch {
+          // Tabelas não criadas ainda — usa fallback
+          if (!cancelled && session?.user) setAppUser(fallbackProfile(session.user))
+          else if (!cancelled) setAppUser(null)
+        } finally {
+          if (!cancelled) {
+            clearTimeout(safetyTimer)
+            setLoading(false)
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) { setAppUser(null); setLoading(false); clearTimeout(safetyTimer) }
+      })
+
+    // 2. Escuta apenas mudanças posteriores (login, logout, refresh de token)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // INITIAL_SESSION já foi tratado pelo getSession() acima
+      if (event === 'INITIAL_SESSION' || cancelled) return
+
       try {
-        if (event === 'SIGNED_OUT' || !session?.user) {
-          setAppUser(null)
+        if (!session?.user || event === 'SIGNED_OUT') {
+          if (!cancelled) setAppUser(null)
         } else {
           const profile = await getOrCreateProfile(session.user)
-          setAppUser(profile)
+          if (!cancelled) setAppUser(profile)
         }
-      } catch (err) {
-        console.error('Erro ao carregar perfil:', err)
-        // Fallback: monta perfil mínimo a partir dos dados do Auth
-        if (session?.user) {
-          setAppUser({
-            uid: session.user.id,
-            email: session.user.email || '',
-            displayName: (session.user.email || '').split('@')[0],
-            role: 'admin',
-            active: true,
-            createdAt: new Date().toISOString(),
-          })
-        } else {
-          setAppUser(null)
-        }
-      } finally {
-        setLoading(false)
+      } catch {
+        if (!cancelled && session?.user) setAppUser(fallbackProfile(session.user))
+        else if (!cancelled) setAppUser(null)
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      clearTimeout(safetyTimer)
+      subscription.unsubscribe()
+    }
   }, [])
 
   function logout() {

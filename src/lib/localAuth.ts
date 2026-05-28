@@ -22,43 +22,60 @@ export async function changePassword(
   if (newPassword.length < 6) throw new Error('A nova senha deve ter no mínimo 6 caracteres.')
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) throw new Error('Sessão inválida.')
-
-  // Verifica senha atual re-autenticando
-  const { error: verifyError } = await supabase.auth.signInWithPassword({
-    email: user.email,
-    password: currentPassword,
-  })
+  const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword })
   if (verifyError) throw new Error('Senha atual incorreta.')
-
   const { error } = await supabase.auth.updateUser({ password: newPassword })
   if (error) throw new Error('Erro ao alterar senha.')
 }
 
 export async function getOrCreateProfile(user: { id: string; email?: string | null }): Promise<AppUser> {
-  const { data: profile } = await supabase
+  // Busca perfil existente
+  const { data: profile, error: selectError } = await supabase
     .from('profiles').select('*').eq('id', user.id).single()
 
+  // Tabela não existe ainda — lança para o caller usar o fallback
+  if (selectError?.code === '42P01') {
+    throw new Error('profiles table not found')
+  }
+
   if (profile) {
-    supabase.from('profiles').update({ last_login: new Date().toISOString() }).eq('id', user.id)
+    void supabase.from('profiles').update({ last_login: new Date().toISOString() }).eq('id', user.id)
     return dbToAppUser(profile)
   }
 
-  // Primeiro usuário recebe admin; demais viewer
+  // Perfil não existe — cria. Primeiro usuário vira admin, demais viewer.
   const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
   const role: UserRole = count === 0 ? 'admin' : 'viewer'
-  const newProfile = { id: user.id, email: user.email!, display_name: user.email!.split('@')[0], role, active: true }
-  await supabase.from('profiles').insert(newProfile)
+  const newProfile = {
+    id: user.id,
+    email: user.email ?? '',
+    display_name: (user.email ?? '').split('@')[0],
+    role,
+    active: true,
+  }
+
+  const { error: insertError } = await supabase.from('profiles').insert(newProfile)
+  if (insertError?.code === '42P01') throw new Error('profiles table not found')
 
   return {
-    uid: user.id, email: user.email!, displayName: newProfile.display_name,
-    role, active: true, createdAt: new Date().toISOString(), lastLogin: new Date().toISOString(),
+    uid: user.id,
+    email: newProfile.email,
+    displayName: newProfile.display_name,
+    role,
+    active: true,
+    createdAt: new Date().toISOString(),
+    lastLogin: new Date().toISOString(),
   }
 }
 
 export function dbToAppUser(p: Record<string, unknown>): AppUser {
   return {
-    uid: p.id as string, email: p.email as string, displayName: p.display_name as string,
-    role: p.role as UserRole, active: p.active as boolean,
-    createdAt: p.created_at as string, lastLogin: p.last_login as string | undefined,
+    uid: p.id as string,
+    email: p.email as string,
+    displayName: p.display_name as string,
+    role: p.role as UserRole,
+    active: p.active as boolean,
+    createdAt: p.created_at as string,
+    lastLogin: p.last_login as string | undefined,
   }
 }
