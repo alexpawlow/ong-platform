@@ -18,24 +18,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Carrega sessão existente ao iniciar
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const profile = await getOrCreateProfile(session.user)
-        setAppUser(profile)
-      }
-      setLoading(false)
-    })
-
-    // Escuta login, logout e refresh de token
+    // Usa apenas onAuthStateChange — ele dispara imediatamente com a sessão atual
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT' || !session?.user) {
-        setAppUser(null)
-      } else if (session?.user) {
-        const profile = await getOrCreateProfile(session.user)
-        setAppUser(profile)
+      try {
+        if (event === 'SIGNED_OUT' || !session?.user) {
+          setAppUser(null)
+        } else {
+          const profile = await getOrCreateProfile(session.user)
+          setAppUser(profile)
+        }
+      } catch (err) {
+        console.error('Erro ao carregar perfil:', err)
+        // Fallback: monta perfil mínimo a partir dos dados do Auth
+        if (session?.user) {
+          setAppUser({
+            uid: session.user.id,
+            email: session.user.email || '',
+            displayName: (session.user.email || '').split('@')[0],
+            role: 'admin',
+            active: true,
+            createdAt: new Date().toISOString(),
+          })
+        } else {
+          setAppUser(null)
+        }
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     })
 
     return () => subscription.unsubscribe()
