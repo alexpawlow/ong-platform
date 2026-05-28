@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { getOrCreateProfile, logout as supabaseLogout } from '../lib/localAuth'
+import { getOrCreateProfile, logout as doLogout } from '../lib/localAuth'
 import type { AppUser } from '../types'
 
 interface AuthContextValue {
@@ -13,7 +13,6 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-/** Monta um perfil mínimo a partir dos dados do Auth (fallback sem DB) */
 function fallbackProfile(user: { id: string; email?: string | null }): AppUser {
   return {
     uid: user.id,
@@ -32,52 +31,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
-    // Safety net: nunca deixa o loading preso por mais de 4 segundos
+    // Safety net global: nunca fica preso por mais de 5 segundos
     const safetyTimer = setTimeout(() => {
       if (!cancelled) setLoading(false)
-    }, 4000)
+    }, 5000)
 
-    // 1. Carrega sessão existente de forma direta e confiável
-    supabase.auth.getSession()
-      .then(async ({ data: { session }, error }) => {
-        if (cancelled) return
-        try {
-          if (session?.user && !error) {
-            const profile = await getOrCreateProfile(session.user)
-            if (!cancelled) setAppUser(profile)
-          } else {
-            if (!cancelled) setAppUser(null)
-          }
-        } catch {
-          // Tabelas não criadas ainda — usa fallback
-          if (!cancelled && session?.user) setAppUser(fallbackProfile(session.user))
-          else if (!cancelled) setAppUser(null)
-        } finally {
-          if (!cancelled) {
-            clearTimeout(safetyTimer)
-            setLoading(false)
-          }
-        }
-      })
-      .catch(() => {
-        if (!cancelled) { setAppUser(null); setLoading(false); clearTimeout(safetyTimer) }
-      })
-
-    // 2. Escuta apenas mudanças posteriores (login, logout, refresh de token)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // INITIAL_SESSION já foi tratado pelo getSession() acima
-      if (event === 'INITIAL_SESSION' || cancelled) return
-
+    async function init() {
       try {
-        if (!session?.user || event === 'SIGNED_OUT') {
+        const { data: { session } } = await supabase.auth.getSession()
+
+        if (!session?.user) {
           if (!cancelled) setAppUser(null)
-        } else {
-          const profile = await getOrCreateProfile(session.user)
-          if (!cancelled) setAppUser(profile)
+          return
         }
+
+        // Tenta carregar perfil do banco, mas cai para fallback em 3s
+        // (caso o REST API também tenha problemas de CORS)
+        const profilePromise = getOrCreateProfile(session.user)
+        const fallbackTimer = new Promise<AppUser>((resolve) =>
+          setTimeout(() => resolve(fallbackProfile(session.user)), 3000)
+        )
+
+        const profile = await Promise.race([profilePromise, fallbackTimer])
+        if (!cancelled) setAppUser(profile)
       } catch {
-        if (!cancelled && session?.user) setAppUser(fallbackProfile(session.user))
-        else if (!cancelled) setAppUser(null)
+        if (!cancelled) setAppUser(null)
+      } finally {
+        if (!cancelled) {
+          clearTimeout(safetyTimer)
+          setLoading(false)
+        }
+      }
+    }
+
+    init()
+
+    // Escuta apenas logout e renovação de token (não INITIAL_SESSION)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        if (!cancelled) { setAppUser(null); setLoading(false) }
       }
     })
 
@@ -89,8 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   function logout() {
-    supabaseLogout()
-    setAppUser(null)
+    doLogout()
   }
 
   function refreshUser(u: AppUser) {

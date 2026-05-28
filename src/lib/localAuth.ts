@@ -2,42 +2,77 @@ import { supabase } from './supabaseClient'
 import type { AppUser, UserRole } from '../types'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+// Extrai o projectRef da URL: https://xxtboonawnvlnzmjwqfn.supabase.co → xxtboonawnvlnzmjwqfn
+function getProjectRef() {
+  return SUPABASE_URL.split('//')[1]?.split('.')[0] ?? ''
+}
+
+// Decodifica o payload do JWT sem verificar assinatura (operação local, sem rede)
+function decodeJwt(token: string): Record<string, unknown> {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(base64))
+  } catch {
+    return {}
+  }
+}
 
 export async function login(email: string, password: string): Promise<void> {
-  // Faz fetch direto ao endpoint (igual ao curl que funciona),
-  // sem depender do comportamento interno do SDK.
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+  // Chama /api/supabase-auth (mesmo domínio = sem CORS).
+  // O Vercel repassa para o Supabase server-side.
+  const res = await fetch('/api/supabase-auth', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_KEY,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   })
 
   const data = await res.json()
 
   if (!res.ok) {
-    const msg: string = data?.error_description ?? data?.message ?? data?.error ?? ''
-    if (msg.includes('Invalid login credentials') || data?.error === 'invalid_grant') {
+    const errMsg: string = data?.error_description ?? data?.message ?? data?.error ?? ''
+    if (data?.error === 'invalid_grant' || errMsg.includes('Invalid login credentials')) {
       throw new Error('E-mail ou senha incorretos.')
     }
     if (data?.error === 'email_not_confirmed') {
-      throw new Error('E-mail não confirmado. Confirme em Supabase → Auth → Users.')
+      throw new Error('E-mail não confirmado. Verifique sua caixa de entrada.')
     }
-    throw new Error(`Erro ao entrar: ${msg || res.status}`)
+    throw new Error(errMsg || `Erro ao entrar (${res.status})`)
   }
 
-  // Injeta a sessão no cliente Supabase para que o onAuthStateChange dispare
-  await supabase.auth.setSession({
+  // Armazena a sessão no localStorage no formato que o Supabase SDK espera.
+  // Evita chamar setSession() que faz chamadas de rede que travam por CORS.
+  const payload = decodeJwt(data.access_token)
+  const session = {
     access_token: data.access_token,
     refresh_token: data.refresh_token,
-  })
+    token_type: 'bearer',
+    expires_in: data.expires_in ?? 3600,
+    expires_at: payload.exp as number,
+    user: {
+      id: payload.sub,
+      aud: payload.aud ?? 'authenticated',
+      role: payload.role ?? 'authenticated',
+      email: payload.email ?? email,
+      email_confirmed_at: new Date().toISOString(),
+      app_metadata: payload.app_metadata ?? {},
+      user_metadata: payload.user_metadata ?? {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  }
+
+  localStorage.setItem(`sb-${getProjectRef()}-auth-token`, JSON.stringify(session))
+
+  // Navega para o dashboard com reload completo.
+  // Assim o SDK lê a sessão do localStorage na inicialização (sem chamadas de rede).
+  window.location.href = '/dashboard'
 }
 
 export async function logout(): Promise<void> {
-  await supabase.auth.signOut()
+  localStorage.removeItem(`sb-${getProjectRef()}-auth-token`)
+  await supabase.auth.signOut().catch(() => {})
+  window.location.href = '/login'
 }
 
 export async function changePassword(
@@ -46,14 +81,13 @@ export async function changePassword(
   newPassword: string
 ): Promise<void> {
   if (newPassword.length < 6) throw new Error('A nova senha deve ter no mínimo 6 caracteres.')
-
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) throw new Error('Sessão inválida.')
 
-  // Verifica senha atual
-  const verifyRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+  // Verifica senha atual via proxy
+  const verifyRes = await fetch('/api/supabase-auth', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: user.email, password: currentPassword }),
   })
   if (!verifyRes.ok) throw new Error('Senha atual incorreta.')
