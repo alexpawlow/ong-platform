@@ -899,85 +899,133 @@ img { max-width: 100%; }
   margin-top: 4px;
 }
 
-/* ─── Functions Panel ────────────────────────────────────── */
-.functions-panel { display: flex; flex-direction: column; gap: 16px; }
+/* ─── Functions Panel (fp-*) ─────────────────────────────── */
+.fp-card { display: flex; flex-direction: column; }
 
-.functions-panel__header {
+.fp-header {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
-.functions-panel__header strong { font-size: 0.9rem; font-weight: 600; }
+.fp-header__icon { color: var(--primary); flex-shrink: 0; }
+.fp-header__title { font-size: 0.9rem; font-weight: 600; }
+.fp-header__sub { font-size: 0.8rem; color: var(--text-muted); }
+.fp-header__actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
-.functions-search {
+.fp-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 0.82rem;
+  color: var(--danger, #dc2626);
+  background: color-mix(in srgb, var(--danger, #dc2626) 8%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+
+.fp-search-wrap {
+  position: relative;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.fp-search-icon {
+  position: absolute;
+  left: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.fp-search {
   width: 100%;
-  padding: 8px 12px;
+  padding: 7px 12px 7px 34px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--bg-surface);
+  background: var(--bg-muted);
   color: var(--text-primary);
   font-size: 0.85rem;
   font-family: inherit;
   outline: none;
-  transition: border-color var(--transition);
+  transition: border-color var(--transition), background var(--transition);
+  box-sizing: border-box;
 }
-.functions-search:focus { border-color: var(--primary); }
+.fp-search:focus { border-color: var(--primary); background: var(--bg-surface); }
 
-.functions-list { display: flex; flex-direction: column; gap: 4px; max-height: 480px; overflow-y: auto; }
+.fp-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 500px;
+  overflow-y: auto;
+}
 
-.functions-group { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+/* Cada grupo */
+.fp-group { border-bottom: 1px solid var(--border); }
+.fp-group:last-child { border-bottom: none; }
 
-.functions-group__header {
+.fp-group__head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  width: 100%;
+  padding: 10px 18px;
   background: var(--bg-muted);
+  border: none;
   cursor: pointer;
-  user-select: none;
+  text-align: left;
+  font-family: inherit;
   font-size: 0.82rem;
   font-weight: 600;
+  color: var(--text-primary);
   transition: background var(--transition);
 }
-.functions-group__header:hover { background: var(--border); }
-.functions-group__name { flex: 1; }
-.functions-group__count { font-size: 0.75rem; font-weight: 400; color: var(--text-muted); }
+.fp-group__head:hover { background: var(--border); }
 
-.functions-checkbox {
+.fp-group__chevron { color: var(--text-muted); flex-shrink: 0; display: flex; align-items: center; }
+.fp-group__name { flex: 1; }
+.fp-group__count { display: flex; align-items: center; gap: 8px; }
+.fp-group__active { font-size: 0.72rem; font-weight: 600; color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); padding: 1px 6px; border-radius: 99px; }
+.fp-group__total { font-size: 0.75rem; font-weight: 400; color: var(--text-muted); }
+
+.fp-toggle-all {
   display: flex;
   align-items: center;
   gap: 5px;
   font-size: 0.75rem;
   font-weight: 400;
-  cursor: pointer;
   color: var(--text-secondary);
-  padding: 2px 6px;
+  cursor: pointer;
+  padding: 2px 8px;
   border-radius: var(--radius-sm);
   transition: background var(--transition);
+  white-space: nowrap;
 }
-.functions-checkbox:hover { background: var(--bg-surface); }
+.fp-toggle-all:hover { background: var(--bg-surface); }
 
-.functions-group__items { display: flex; flex-direction: column; }
+/* Itens de função */
+.fp-group__items { display: flex; flex-direction: column; }
 
-.function-item {
+.fp-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 10px 18px 10px 42px;
   cursor: pointer;
   border-top: 1px solid var(--border);
   transition: background var(--transition);
 }
-.function-item:hover { background: var(--bg-muted); }
-.function-item--active { background: color-mix(in srgb, var(--primary) 5%, transparent); }
-.function-item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; accent-color: var(--primary); cursor: pointer; }
+.fp-item:hover { background: var(--bg-muted); }
+.fp-item--on { background: color-mix(in srgb, var(--primary) 5%, transparent); }
+.fp-item--on:hover { background: color-mix(in srgb, var(--primary) 9%, transparent); }
+.fp-item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; accent-color: var(--primary); cursor: pointer; }
 
-.function-item__body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-.function-item__label { font-size: 0.855rem; font-weight: 600; }
-.function-item__name { font-size: 0.75rem; color: var(--text-muted); font-family: monospace; }
-.function-item__desc { font-size: 0.8rem; color: var(--text-secondary); }
-.function-item__use {
+.fp-item__body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.fp-item__label { font-size: 0.855rem; font-weight: 600; }
+.fp-item__name { font-size: 0.72rem; color: var(--text-muted); font-family: monospace; }
+.fp-item__desc { font-size: 0.79rem; color: var(--text-secondary); }
+.fp-item__use {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -986,6 +1034,8 @@ img { max-width: 100%; }
   font-weight: 500;
   margin-top: 2px;
 }
+
+.fp-empty { padding: 32px 18px; text-align: center; color: var(--text-muted); font-size: 0.85rem; }
 
 /* ─── Automations ────────────────────────────────────────── */
 .automations-list { display: flex; flex-direction: column; gap: 12px; }

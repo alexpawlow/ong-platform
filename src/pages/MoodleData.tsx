@@ -61,7 +61,8 @@ function FunctionsPanel({ config, onSave }: { config: MoodleConfig; onSave: (cfg
     })
   }
 
-  function toggleCategory(fns: MoodleFunctionInfo[]) {
+  function toggleCategory(e: React.MouseEvent, fns: MoodleFunctionInfo[]) {
+    e.stopPropagation()
     const names = fns.map(f => f.name)
     const allOn = names.every(n => enabled.has(n))
     setEnabled(prev => {
@@ -87,85 +88,110 @@ function FunctionsPanel({ config, onSave }: { config: MoodleConfig; onSave: (cfg
     setSaving(false)
   }
 
-  if (!loaded) {
-    return (
-      <Card className="functions-panel">
-        <div className="functions-panel__header">
-          <Zap size={16} />
-          <strong>Funções do Dashboard</strong>
-          <span className="text-secondary" style={{ fontSize: 13 }}>Escolha quais dados do Moodle alimentam o dashboard</span>
-        </div>
-        {error && <div className="alert alert--error"><XCircle size={14} />{error}</div>}
-        <Button size="sm" variant="secondary" onClick={fetchFunctions} loading={loading}>
-          Carregar funções disponíveis
-        </Button>
-      </Card>
-    )
-  }
-
   return (
-    <Card className="functions-panel">
-      <div className="functions-panel__header">
-        <Zap size={16} />
-        <strong>Funções do Dashboard</strong>
-        <Badge variant="primary">{enabled.size} ativas</Badge>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} onClick={fetchFunctions} loading={loading}>Atualizar</Button>
-          <Button size="sm" icon={<Save size={13} />} onClick={handleSave} loading={saving}>Salvar seleção</Button>
+    <Card padding="none" className="fp-card">
+      {/* Cabeçalho fixo */}
+      <div className="fp-header">
+        <Zap size={15} className="fp-header__icon" />
+        <span className="fp-header__title">Funções do Dashboard</span>
+        {loaded && <Badge variant="primary">{enabled.size} ativas</Badge>}
+        {!loaded && <span className="fp-header__sub">Escolha quais dados do Moodle alimentam o dashboard</span>}
+        <div className="fp-header__actions">
+          {loaded && (
+            <>
+              <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} onClick={fetchFunctions} loading={loading}>Atualizar</Button>
+              <Button size="sm" icon={<Save size={13} />} onClick={handleSave} loading={saving}>Salvar seleção</Button>
+            </>
+          )}
+          {!loaded && (
+            <Button size="sm" variant="secondary" onClick={fetchFunctions} loading={loading}>
+              Carregar funções disponíveis
+            </Button>
+          )}
         </div>
       </div>
 
-      <div style={{ position: 'relative' }}>
-        <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
-        <input
-          className="functions-search"
-          placeholder="Filtrar funções..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ paddingLeft: 34 }}
-        />
-      </div>
+      {error && (
+        <div className="fp-error">
+          <XCircle size={14} />{error}
+        </div>
+      )}
 
-      <div className="functions-list">
-        {grouped.map(([cat, fns]) => {
-          const isCollapsed = collapsed.has(cat)
-          const allOn = fns.every(f => enabled.has(f.name))
-          const someOn = fns.some(f => enabled.has(f.name))
-          return (
-            <div key={cat} className="functions-group">
-              <div className="functions-group__header" onClick={() => toggleCollapse(cat)}>
-                {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                <span className="functions-group__name">{cat}</span>
-                <span className="functions-group__count">{fns.length} função{fns.length !== 1 ? 'ões' : ''}</span>
-                <label className="functions-checkbox" onClick={e => { e.stopPropagation(); toggleCategory(fns) }}>
-                  <input type="checkbox" checked={allOn} ref={el => { if (el) el.indeterminate = !allOn && someOn }} onChange={() => {}} />
-                  <span>Todas</span>
-                </label>
-              </div>
-              {!isCollapsed && (
-                <div className="functions-group__items">
-                  {fns.map(fn => (
-                    <label key={fn.name} className={`function-item ${enabled.has(fn.name) ? 'function-item--active' : ''}`}>
-                      <input type="checkbox" checked={enabled.has(fn.name)} onChange={() => toggleFunction(fn.name)} />
-                      <div className="function-item__body">
-                        <span className="function-item__label">{fn.label}</span>
-                        <code className="function-item__name">{fn.name}</code>
-                        <span className="function-item__desc">{fn.description}</span>
-                        {fn.dashboardUse && (
-                          <span className="function-item__use"><Zap size={10} /> {fn.dashboardUse}</span>
-                        )}
-                      </div>
+      {loaded && (
+        <>
+          {/* Busca */}
+          <div className="fp-search-wrap">
+            <Search size={14} className="fp-search-icon" />
+            <input
+              className="fp-search"
+              placeholder="Filtrar funções..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+
+          {/* Lista */}
+          <div className="fp-list">
+            {grouped.map(([cat, fns]) => {
+              const isCollapsed = collapsed.has(cat)
+              const allOn = fns.every(f => enabled.has(f.name))
+              const someOn = fns.some(f => enabled.has(f.name))
+              const activeCount = fns.filter(f => enabled.has(f.name)).length
+              return (
+                <div key={cat} className="fp-group">
+                  {/* Cabeçalho da categoria */}
+                  <button className="fp-group__head" onClick={() => toggleCollapse(cat)}>
+                    <span className="fp-group__chevron">
+                      {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                    </span>
+                    <span className="fp-group__name">{cat}</span>
+                    <span className="fp-group__count">
+                      {activeCount > 0 && <span className="fp-group__active">{activeCount} ativa{activeCount !== 1 ? 's' : ''}</span>}
+                      <span className="fp-group__total">{fns.length} função{fns.length !== 1 ? 'ões' : ''}</span>
+                    </span>
+                    <label className="fp-toggle-all" onClick={e => toggleCategory(e, fns)}>
+                      <input
+                        type="checkbox"
+                        checked={allOn}
+                        ref={el => { if (el) el.indeterminate = !allOn && someOn }}
+                        onChange={() => {}}
+                      />
+                      <span>Todas</span>
                     </label>
-                  ))}
+                  </button>
+
+                  {/* Itens */}
+                  {!isCollapsed && (
+                    <div className="fp-group__items">
+                      {fns.map(fn => (
+                        <label key={fn.name} className={`fp-item ${enabled.has(fn.name) ? 'fp-item--on' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={enabled.has(fn.name)}
+                            onChange={() => toggleFunction(fn.name)}
+                          />
+                          <div className="fp-item__body">
+                            <span className="fp-item__label">{fn.label}</span>
+                            <code className="fp-item__name">{fn.name}</code>
+                            <span className="fp-item__desc">{fn.description}</span>
+                            {fn.dashboardUse && (
+                              <span className="fp-item__use"><Zap size={10} />{fn.dashboardUse}</span>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )
-        })}
-        {grouped.length === 0 && (
-          <p className="text-secondary" style={{ textAlign: 'center', padding: '24px 0' }}>Nenhuma função encontrada para "{search}".</p>
-        )}
-      </div>
+              )
+            })}
+
+            {grouped.length === 0 && (
+              <p className="fp-empty">Nenhuma função encontrada para "{search}".</p>
+            )}
+          </div>
+        </>
+      )}
     </Card>
   )
 }
