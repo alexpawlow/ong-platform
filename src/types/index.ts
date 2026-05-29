@@ -78,6 +78,12 @@ export interface Automation {
   createdBy: string
 }
 
+export interface MoodleSnapshot {
+  courses: MoodleCourse[]
+  usersByCourse: Record<number, MoodleUser[]>
+  syncedAt: string
+}
+
 export interface DashboardMetrics {
   totalUsers: number
   activeCourses: number

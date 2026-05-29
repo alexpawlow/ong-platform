@@ -7,7 +7,7 @@ import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { MoodleService, MOCK_COURSES, catalogFunction } from '../services/moodleService'
 import type { MoodleFunctionInfo } from '../services/moodleService'
-import { getMoodleConfig, saveMoodleConfig, getMoodleCourses, saveMoodleCourses } from '../lib/storage'
+import { getMoodleConfig, saveMoodleConfig, getMoodleCourses, saveMoodleCourses, getMoodleSnapshot, saveMoodleSnapshot } from '../lib/storage'
 import type { MoodleConfig, MoodleCourse } from '../types'
 
 // ── Painel de funções ──────────────────────────────────────────────────────────
@@ -247,10 +247,40 @@ export default function MoodleData() {
     setSyncing(true)
     try {
       const svc = new MoodleService(config.url, config.token)
-      const data = await svc.getCourses()
-      setCourses(data)
+      // 1. Busca cursos
+      const fetchedCourses = await svc.getCourses()
+
+      // 2. Busca alunos de cada curso em paralelo
+      const userResults = await Promise.allSettled(
+        fetchedCourses.map(c => svc.getEnrolledUsers(c.id).then(users => ({ courseId: c.id, users })))
+      )
+
+      // 3. Monta mapa de alunos por curso e atualiza enrolledCount
+      const usersByCourse: Record<number, import('../types').MoodleUser[]> = {}
+      fetchedCourses.forEach((c, i) => {
+        const r = userResults[i]
+        if (r.status === 'fulfilled') {
+          usersByCourse[c.id] = r.value.users
+          c.enrolledCount = r.value.users.length
+          const accessed = r.value.users.filter(u => u.lastaccess && u.lastaccess > 0).length
+          c.completionRate = r.value.users.length > 0 ? Math.round(accessed / r.value.users.length * 100) : 0
+        }
+      })
+
+      setCourses(fetchedCourses)
+
       const updatedCfg = { ...config, lastSync: new Date().toISOString() }
-      await Promise.all([saveMoodleConfig(updatedCfg), saveMoodleCourses(data)])
+      const snapshot: import('../types').MoodleSnapshot = {
+        courses: fetchedCourses,
+        usersByCourse,
+        syncedAt: updatedCfg.lastSync!,
+      }
+
+      await Promise.all([
+        saveMoodleConfig(updatedCfg),
+        saveMoodleCourses(fetchedCourses),
+        saveMoodleSnapshot(snapshot),
+      ])
       setConfig(updatedCfg)
     } catch (e) {
       console.error(e)

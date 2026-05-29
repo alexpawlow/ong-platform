@@ -135,6 +135,17 @@ export async function saveMoodleCourses(courses: import('../types').MoodleCourse
   if (error) throw error
 }
 
+export async function getMoodleSnapshot(): Promise<import('../types').MoodleSnapshot | null> {
+  const { data } = await supabase.from('settings').select('value').eq('key', 'moodle_snapshot').single()
+  return data ? (data.value as import('../types').MoodleSnapshot) : null
+}
+
+export async function saveMoodleSnapshot(snapshot: import('../types').MoodleSnapshot): Promise<void> {
+  const { error } = await supabase.from('settings')
+    .upsert({ key: 'moodle_snapshot', value: snapshot, updated_at: new Date().toISOString() })
+  if (error) throw error
+}
+
 export async function getMailchimpConfig(): Promise<MailchimpConfig | null> {
   const { data } = await supabase.from('settings').select('value').eq('key', 'mailchimp').single()
   return data ? (data.value as MailchimpConfig) : null
