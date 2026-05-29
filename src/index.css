@@ -406,6 +406,64 @@ img { max-width: 100%; }
 .metric-card__trend--down { background: var(--danger-light); color: var(--danger); }
 .metric-card__trend-label { font-size: 0.7rem; color: var(--text-muted); }
 
+/* ─── Course Tabs ────────────────────────────────────────── */
+.course-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.course-tabs::-webkit-scrollbar { display: none; }
+
+.course-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+.course-tab:hover { border-color: var(--primary); color: var(--primary); }
+.course-tab--active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.course-tab--active:hover { background: var(--primary); color: #fff; }
+
+.course-tab__count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: rgba(255,255,255,0.2);
+}
+.course-tab:not(.course-tab--active) .course-tab__count {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+
+/* ─── Empty State ────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.empty-state__icon { color: var(--text-muted); opacity: 0.5; }
+.empty-state h3 { font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin: 0; }
+.empty-state p { font-size: 0.85rem; color: var(--text-muted); margin: 0; max-width: 360px; }
+
 /* ─── Charts ─────────────────────────────────────────────── */
 .charts-row {
   display: grid;

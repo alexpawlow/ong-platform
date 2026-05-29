@@ -7,7 +7,7 @@ import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { MoodleService, MOCK_COURSES, catalogFunction } from '../services/moodleService'
 import type { MoodleFunctionInfo } from '../services/moodleService'
-import { getMoodleConfig, saveMoodleConfig } from '../lib/storage'
+import { getMoodleConfig, saveMoodleConfig, getMoodleCourses, saveMoodleCourses } from '../lib/storage'
 import type { MoodleConfig, MoodleCourse } from '../types'
 
 // ── Painel de funções ──────────────────────────────────────────────────────────
@@ -199,7 +199,7 @@ function FunctionsPanel({ config, onSave }: { config: MoodleConfig; onSave: (cfg
 // ── Página principal ───────────────────────────────────────────────────────────
 export default function MoodleData() {
   const [config, setConfig] = useState<MoodleConfig>({ url: '', token: '', connected: false })
-  const [courses, setCourses] = useState<MoodleCourse[]>(MOCK_COURSES)
+  const [courses, setCourses] = useState<MoodleCourse[]>([])
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
@@ -208,7 +208,16 @@ export default function MoodleData() {
   const [selectedCourse, setSelectedCourse] = useState<MoodleCourse | null>(null)
 
   useEffect(() => {
-    getMoodleConfig().then((cfg) => { if (cfg) setConfig(cfg) })
+    async function loadData() {
+      const [cfg, savedCourses] = await Promise.all([getMoodleConfig(), getMoodleCourses()])
+      if (cfg) setConfig(cfg)
+      if (savedCourses && savedCourses.length > 0) {
+        setCourses(savedCourses)
+      } else if (!cfg?.connected) {
+        setCourses(MOCK_COURSES)
+      }
+    }
+    loadData()
   }, [])
 
   async function handleTestAndSave() {
@@ -240,7 +249,9 @@ export default function MoodleData() {
       const svc = new MoodleService(config.url, config.token)
       const data = await svc.getCourses()
       setCourses(data)
-      saveMoodleConfig({ ...config, lastSync: new Date().toISOString() })
+      const updatedCfg = { ...config, lastSync: new Date().toISOString() }
+      await Promise.all([saveMoodleConfig(updatedCfg), saveMoodleCourses(data)])
+      setConfig(updatedCfg)
     } catch (e) {
       console.error(e)
     } finally {
@@ -272,7 +283,9 @@ export default function MoodleData() {
             : <span>Configure as credenciais da API do Moodle para sincronizar dados reais.</span>}
         </div>
         {!config.connected && <Badge variant="warning">Dados demonstrativos</Badge>}
+        {config.connected && courses.length === 0 && <Badge variant="warning">Sincronize para carregar cursos</Badge>}
         {!config.connected && <Button size="sm" onClick={() => setConfigOpen(true)}>Configurar agora</Button>}
+        {config.connected && courses.length === 0 && <Button size="sm" variant="secondary" icon={<RefreshCw size={13} />} onClick={handleSync} loading={syncing}>Sincronizar agora</Button>}
       </Card>
 
       {config.connected && (
