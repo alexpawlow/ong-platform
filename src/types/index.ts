@@ -16,6 +16,7 @@ export interface MoodleConfig {
   token: string
   connected: boolean
   lastSync?: string
+  enabledFunctions?: string[]
 }
 
 export interface MailchimpConfig {

@@ -1,14 +1,176 @@
-import { useState, useEffect } from 'react'
-import { BookOpen, RefreshCw, CheckCircle2, XCircle, ExternalLink } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { BookOpen, RefreshCw, CheckCircle2, XCircle, ExternalLink, Zap, Search, Save, ChevronDown, ChevronRight } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
-import { MoodleService, MOCK_COURSES } from '../services/moodleService'
+import { MoodleService, MOCK_COURSES, catalogFunction } from '../services/moodleService'
+import type { MoodleFunctionInfo } from '../services/moodleService'
 import { getMoodleConfig, saveMoodleConfig } from '../lib/storage'
 import type { MoodleConfig, MoodleCourse } from '../types'
 
+// ── Painel de funções ──────────────────────────────────────────────────────────
+function FunctionsPanel({ config, onSave }: { config: MoodleConfig; onSave: (cfg: MoodleConfig) => void }) {
+  const [functions, setFunctions] = useState<MoodleFunctionInfo[]>([])
+  const [enabled, setEnabled] = useState<Set<string>>(new Set(config.enabledFunctions ?? []))
+  const [loading, setLoading] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+
+  async function fetchFunctions() {
+    setLoading(true)
+    setError('')
+    try {
+      const svc = new MoodleService(config.url, config.token)
+      const raw = await svc.getSiteFunctions()
+      setFunctions(raw.map(f => catalogFunction(f.name)))
+      setLoaded(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    return q
+      ? functions.filter(f => f.name.toLowerCase().includes(q) || f.label.toLowerCase().includes(q) || f.category.toLowerCase().includes(q))
+      : functions
+  }, [functions, search])
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, MoodleFunctionInfo[]>()
+    for (const f of filtered) {
+      const arr = map.get(f.category) ?? []
+      arr.push(f)
+      map.set(f.category, arr)
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
+  }, [filtered])
+
+  function toggleFunction(name: string) {
+    setEnabled(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
+    })
+  }
+
+  function toggleCategory(fns: MoodleFunctionInfo[]) {
+    const names = fns.map(f => f.name)
+    const allOn = names.every(n => enabled.has(n))
+    setEnabled(prev => {
+      const next = new Set(prev)
+      names.forEach(n => allOn ? next.delete(n) : next.add(n))
+      return next
+    })
+  }
+
+  function toggleCollapse(cat: string) {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      next.has(cat) ? next.delete(cat) : next.add(cat)
+      return next
+    })
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    const updated = { ...config, enabledFunctions: Array.from(enabled) }
+    await saveMoodleConfig(updated)
+    onSave(updated)
+    setSaving(false)
+  }
+
+  if (!loaded) {
+    return (
+      <Card className="functions-panel">
+        <div className="functions-panel__header">
+          <Zap size={16} />
+          <strong>Funções do Dashboard</strong>
+          <span className="text-secondary" style={{ fontSize: 13 }}>Escolha quais dados do Moodle alimentam o dashboard</span>
+        </div>
+        {error && <div className="alert alert--error"><XCircle size={14} />{error}</div>}
+        <Button size="sm" variant="secondary" onClick={fetchFunctions} loading={loading}>
+          Carregar funções disponíveis
+        </Button>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="functions-panel">
+      <div className="functions-panel__header">
+        <Zap size={16} />
+        <strong>Funções do Dashboard</strong>
+        <Badge variant="primary">{enabled.size} ativas</Badge>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} onClick={fetchFunctions} loading={loading}>Atualizar</Button>
+          <Button size="sm" icon={<Save size={13} />} onClick={handleSave} loading={saving}>Salvar seleção</Button>
+        </div>
+      </div>
+
+      <div style={{ position: 'relative' }}>
+        <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
+        <input
+          className="functions-search"
+          placeholder="Filtrar funções..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ paddingLeft: 34 }}
+        />
+      </div>
+
+      <div className="functions-list">
+        {grouped.map(([cat, fns]) => {
+          const isCollapsed = collapsed.has(cat)
+          const allOn = fns.every(f => enabled.has(f.name))
+          const someOn = fns.some(f => enabled.has(f.name))
+          return (
+            <div key={cat} className="functions-group">
+              <div className="functions-group__header" onClick={() => toggleCollapse(cat)}>
+                {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                <span className="functions-group__name">{cat}</span>
+                <span className="functions-group__count">{fns.length} função{fns.length !== 1 ? 'ões' : ''}</span>
+                <label className="functions-checkbox" onClick={e => { e.stopPropagation(); toggleCategory(fns) }}>
+                  <input type="checkbox" checked={allOn} ref={el => { if (el) el.indeterminate = !allOn && someOn }} onChange={() => {}} />
+                  <span>Todas</span>
+                </label>
+              </div>
+              {!isCollapsed && (
+                <div className="functions-group__items">
+                  {fns.map(fn => (
+                    <label key={fn.name} className={`function-item ${enabled.has(fn.name) ? 'function-item--active' : ''}`}>
+                      <input type="checkbox" checked={enabled.has(fn.name)} onChange={() => toggleFunction(fn.name)} />
+                      <div className="function-item__body">
+                        <span className="function-item__label">{fn.label}</span>
+                        <code className="function-item__name">{fn.name}</code>
+                        <span className="function-item__desc">{fn.description}</span>
+                        {fn.dashboardUse && (
+                          <span className="function-item__use"><Zap size={10} /> {fn.dashboardUse}</span>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {grouped.length === 0 && (
+          <p className="text-secondary" style={{ textAlign: 'center', padding: '24px 0' }}>Nenhuma função encontrada para "{search}".</p>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+// ── Página principal ───────────────────────────────────────────────────────────
 export default function MoodleData() {
   const [config, setConfig] = useState<MoodleConfig>({ url: '', token: '', connected: false })
   const [courses, setCourses] = useState<MoodleCourse[]>(MOCK_COURSES)
@@ -86,6 +248,10 @@ export default function MoodleData() {
         {!config.connected && <Badge variant="warning">Dados demonstrativos</Badge>}
         {!config.connected && <Button size="sm" onClick={() => setConfigOpen(true)}>Configurar agora</Button>}
       </Card>
+
+      {config.connected && (
+        <FunctionsPanel config={config} onSave={setConfig} />
+      )}
 
       <div className="courses-grid">
         {courses.map((course) => (

@@ -899,6 +899,94 @@ img { max-width: 100%; }
   margin-top: 4px;
 }
 
+/* ─── Functions Panel ────────────────────────────────────── */
+.functions-panel { display: flex; flex-direction: column; gap: 16px; }
+
+.functions-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.functions-panel__header strong { font-size: 0.9rem; font-weight: 600; }
+
+.functions-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color var(--transition);
+}
+.functions-search:focus { border-color: var(--primary); }
+
+.functions-list { display: flex; flex-direction: column; gap: 4px; max-height: 480px; overflow-y: auto; }
+
+.functions-group { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+
+.functions-group__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-muted);
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: background var(--transition);
+}
+.functions-group__header:hover { background: var(--border); }
+.functions-group__name { flex: 1; }
+.functions-group__count { font-size: 0.75rem; font-weight: 400; color: var(--text-muted); }
+
+.functions-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 400;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
+}
+.functions-checkbox:hover { background: var(--bg-surface); }
+
+.functions-group__items { display: flex; flex-direction: column; }
+
+.function-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.function-item:hover { background: var(--bg-muted); }
+.function-item--active { background: color-mix(in srgb, var(--primary) 5%, transparent); }
+.function-item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; accent-color: var(--primary); cursor: pointer; }
+
+.function-item__body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.function-item__label { font-size: 0.855rem; font-weight: 600; }
+.function-item__name { font-size: 0.75rem; color: var(--text-muted); font-family: monospace; }
+.function-item__desc { font-size: 0.8rem; color: var(--text-secondary); }
+.function-item__use {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--primary);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
 /* ─── Automations ────────────────────────────────────────── */
 .automations-list { display: flex; flex-direction: column; gap: 12px; }
 
