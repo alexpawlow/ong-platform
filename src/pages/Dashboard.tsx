@@ -99,10 +99,10 @@ export default function Dashboard() {
   // Filters
   const [filterStatus, setFilterStatus] = useState<'all' | 'accessed' | 'never' | 'inactive' | 'active7'>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterInactiveDays, setFilterInactiveDays] = useState<15 | 30 | 60 | 90>(15)
+  const [filterInactiveDays, setFilterInactiveDays] = useState<number | null>(null)
   const [pendingStatus, setPendingStatus] = useState<typeof filterStatus>('all')
   const [pendingSearch, setPendingSearch] = useState('')
-  const [pendingInactive, setPendingInactive] = useState<15 | 30 | 60 | 90>(15)
+  const [pendingInactive, setPendingInactive] = useState<number | null>(null)
 
   // Table
   const [sortKey, setSortKey] = useState<SortKey>('userName')
@@ -169,7 +169,10 @@ export default function Dashboard() {
     } else if (filterStatus === 'never') {
       rows = rows.filter(r => r.status === 'never')
     } else if (filterStatus === 'inactive') {
-      rows = rows.filter(r => r.status !== 'never' && r.daysSinceAccess > filterInactiveDays)
+      rows = rows.filter(r =>
+        r.status !== 'never' &&
+        (filterInactiveDays === null || r.daysSinceAccess > filterInactiveDays)
+      )
     } else if (filterStatus === 'active7') {
       rows = rows.filter(r => r.status !== 'never' && r.daysSinceAccess <= 7)
     }
@@ -272,10 +275,10 @@ export default function Dashboard() {
   function handleClear() {
     setPendingStatus('all')
     setPendingSearch('')
-    setPendingInactive(15)
+    setPendingInactive(null)
     setFilterStatus('all')
     setSearchQuery('')
-    setFilterInactiveDays(15)
+    setFilterInactiveDays(null)
     setPage(1)
   }
 
@@ -415,9 +418,10 @@ export default function Dashboard() {
               <label className="db-filter-label">Inativo há mais de</label>
               <select
                 className="db-filter-select"
-                value={pendingInactive}
-                onChange={e => setPendingInactive(Number(e.target.value) as 15 | 30 | 60 | 90)}
+                value={pendingInactive ?? ''}
+                onChange={e => setPendingInactive(e.target.value === '' ? null : Number(e.target.value))}
               >
+                <option value="">Todos</option>
                 <option value={15}>15 dias</option>
                 <option value={30}>30 dias</option>
                 <option value={60}>60 dias</option>
